@@ -1,0 +1,2 @@
+# FinBot
+OpenAI financial bot
