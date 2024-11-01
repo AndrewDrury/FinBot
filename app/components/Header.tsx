@@ -1,6 +1,6 @@
 export function Header() {
     return (
-        <header className="p-6 border-b border-zinc-800 flex justify-between items-center">
+        <header className="fixed top-0 w-full p-6 border-b border-zinc-800 flex justify-between items-center bg-black z-50">
             <div>
                 <h1 
                     className="text-2xl font-bold text-yellow-500 cursor-pointer" 
