@@ -32,7 +32,7 @@ function trimData(obj: any, maxSize: number): string {
 
 function formulatePrompt(
   query: string,
-  companiesData: CompanyData[],
+  companiesData: CompanyData[] | null | undefined,
   previousMessages: ChatMessage[]
 ): ChatMessage[] {
   const systemMessage: ChatMessage = {
@@ -44,8 +44,8 @@ function formulatePrompt(
   };
 
   let dataContent = "";
-  if (companiesData && companiesData.length) {
-    // Calculate max chars per company accounting for previous messages
+  if (Array.isArray(companiesData) && companiesData.length > 0) {
+    // Calculate max chars per company accounting for previous messages given prompt char limit
     const previousMessagesChars = previousMessages.reduce(
       (sum, msg) => sum + msg.content.length,
       0
@@ -58,25 +58,22 @@ function formulatePrompt(
       if (company.characterCount > charsPerCompany) {
         const trimmedDataString = trimData(company.data, charsPerCompany);
         return {
-          ...company,
+          name: company.name,
+          characterCount: company.characterCount,
+          symbol: company.symbol,
           data: trimmedDataString,
         };
       }
       return company;
     });
 
-    if (trimmedCompaniesData.length) {
-      dataContent = `\nAvailable Data:\n${JSON.stringify(
-        trimmedCompaniesData
-          .map(
-            (company) => `
-          ${company.name} (${company.symbol})
-          ${company.data}
-          `
-          )
-          .join("\n")
-      )}`;
-    }
+    dataContent = `\nAvailable Data:\n${
+      trimmedCompaniesData
+        .map(company => 
+          `${company.name} (${company.symbol})\n${JSON.stringify(company.data, null, 2)}`
+        )
+        .join("\n\n")
+    }`;
   }
 
   const newUserMessage: ChatMessage = {

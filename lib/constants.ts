@@ -1,10 +1,10 @@
 export const GPT_MODEL_NAME = "gpt-3.5-turbo";
 
-export const FMP_BASE_URL = "https://financialmodelingprep.com/api/v3";
+export const FMP_BASE_URL = "https://financialmodelingprep.com/api";
 
 export const FMP_ENDPOINT_NAMES: { [id: string] : string } = {
-    earnings_call_transcript: "Earning Call Transcript",
-    income_statement: "Income Statements",
+    earning_call_transcript: "Earning Call Transcript",
+    // income_statement: "Income Statements",
     company_profile: "Company Profile",
     analyst_estimates: "Analyst Estimates",
     company_notes: "Company Notes",
@@ -13,7 +13,7 @@ export const FMP_ENDPOINT_NAMES: { [id: string] : string } = {
   };
 
 export const FMP_ENDPOINTS = {
-  earnings_call_transcript: {
+  earning_call_transcript: {
     endpoint: "/earning_call_transcript/{symbol}",
     keywords: [
       "call",
@@ -29,18 +29,18 @@ export const FMP_ENDPOINTS = {
       "deals",
     ],
   },
-  income_statement: {
-    endpoint: "/income-statement/{symbol}",
-    keywords: [
-      "revenue",
-      "profit",
-      "income",
-      "earnings",
-      "margin",
-      "financial",
-      "performance",
-    ],
-  },
+  // income_statement: {
+  //   endpoint: "/income-statement/{symbol}",
+  //   keywords: [
+  //     "revenue",
+  //     "profit",
+  //     "income",
+  //     "earnings",
+  //     "margin",
+  //     "financial",
+  //     "performance",
+  //   ],
+  // },
   company_profile: {
     endpoint: "/profile/{symbol}",
     keywords: ["overview", "background", "describe"],

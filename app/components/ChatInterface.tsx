@@ -1,8 +1,16 @@
 "use client";
-import { useState, KeyboardEvent, FormEvent, Dispatch, SetStateAction, useEffect, useRef } from "react";
+import {
+  useState,
+  KeyboardEvent,
+  FormEvent,
+  Dispatch,
+  SetStateAction,
+  useEffect,
+  useRef,
+} from "react";
 import ReactMarkdown from "react-markdown";
-import { Message } from './Container'
-import { FMP_ENDPOINT_NAMES } from '@/lib/constants';
+import { Message } from "./Container";
+import { FMP_ENDPOINT_NAMES } from "@/lib/constants";
 
 type MarkdownProps = {
   className?: string;
@@ -17,6 +25,10 @@ type ChatInterfaceProps = {
   setShowExamples: Dispatch<SetStateAction<boolean>>;
 };
 
+interface TimePeriod {
+  year: number;
+  quarter?: string;
+}
 
 const LoadingAnimation = () => (
   <div className="flex space-x-1">
@@ -26,41 +38,55 @@ const LoadingAnimation = () => (
   </div>
 );
 
-const LoadingMessage = ({ companies, endpoints }: { companies: string[], endpoints: string[] }) => {
+const formatTimePeriod = (period: TimePeriod): string => {
+  return period.quarter
+    ? `${period.quarter} ${period.year}`
+    : `${period.year}`;
+};
+
+const LoadingMessage = ({
+  companies,
+  endpoints,
+  timePeriods,
+}: {
+  companies: string[];
+  endpoints: string[];
+  timePeriods: TimePeriod[];
+}) => {
   const hasData = companies.length > 0 && endpoints.length > 0;
 
   return (
     <div className="space-y-4">
       <h3 className="font-bold text-lg">
-        {hasData ? "FinBot is Acquiring Data..." : "FinBot is thinking..."}
+        {"FinBot is Acquiring Data..."}
       </h3>
-      {hasData ? (
-        <div className="flex flex-wrap gap-3">
-          {companies.map(company =>
-            endpoints.map(endpoint => (
-              <div 
-                key={`${company}-${endpoint}`}
-                className="bg-zinc-700/50 rounded-lg p-3 text-sm flex flex-col items-center"
-              >
-                <span>
-                  Reading {FMP_ENDPOINT_NAMES[endpoint]} for <span className="text-yellow-500">{company}</span>...
-                </span>
-                <div className="mt-2">
-                  <LoadingAnimation />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        <div className="flex justify-center mt-4">
-          <LoadingAnimation />
+      {hasData && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            {companies.map((company) =>
+              endpoints.map((endpoint) =>
+                timePeriods.map((period) => (
+                  <div
+                    key={`${company}-${endpoint}-${period.year}-${period.quarter}`}
+                    className="bg-zinc-700/50 rounded-lg p-3 text-sm flex flex-col items-center"
+                  >
+                    <span>
+                      Reading <span className="text-yellow-500">{period.quarter} {period.year}</span>{" "}{FMP_ENDPOINT_NAMES[endpoint]} for{" "}
+                      <span className="text-yellow-500">{company}</span>
+                    </span>
+                    <div className="mt-2">
+                      <LoadingAnimation />
+                    </div>
+                  </div>
+                ))
+              )
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 };
-
 
 const examplePrompts = [
   "Summarize Spotify's latest conference call.",
@@ -74,10 +100,11 @@ export function ChatInterface({
   setMessages,
   showExamples,
   setShowExamples,
-}: ChatInterfaceProps) { 
+}: ChatInterfaceProps) {
   const [input, setInput] = useState<string>("");
   const [listCompanies, setCompanies] = useState<string[]>([]);
   const [listEndpoints, setEndpoints] = useState<string[]>([]);
+  const [listTimePeriods, setTimePeriods] = useState<TimePeriod[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -109,35 +136,39 @@ export function ChatInterface({
         throw new Error("Failed to extract companies");
       }
 
-      const { companies, endpoints } = await companiesResponse.json();
-      if (companies.length) setCompanies(companies)
-      if (endpoints.length) setEndpoints(endpoints)
+      const { companies, endpoints, timePeriods } =
+        await companiesResponse.json();
+      if (companies.length) setCompanies(companies);
+      if (endpoints.length) setEndpoints(endpoints);
+      if (timePeriods.length) setTimePeriods(timePeriods);
 
-      let companiesData = {}
-      
+      let allCompaniesData = [];
+
       // Step 2: Fetch financial data for each company/entity
       if (companies.length && endpoints.length) {
         const dataResponse = await fetch("/api/getFMPData", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companies, endpoints, query }),
+          body: JSON.stringify({ companies, endpoints, query, timePeriods }),
         });
-  
+
         if (!dataResponse.ok) {
           throw new Error("Failed to fetch fmp data");
         }
-        const { formattedData } = await dataResponse.json();
-        companiesData = formattedData
+        const { companiesData } = await dataResponse.json();
+        allCompaniesData = JSON.parse(companiesData)
       }
 
       // Step 3: Generate assistant's response using fmp data collected
       const analysisResponse = await fetch("/api/generateResponse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          query, 
-          companiesData,
-          messageHistory: messages.filter(msg => msg.role === "user" || msg.role === "assistant")
+        body: JSON.stringify({
+          query,
+          companiesData: allCompaniesData,
+          messageHistory: messages.filter(
+            (msg) => msg.role === "user" || msg.role === "assistant"
+          ),
         }),
       });
 
@@ -182,6 +213,7 @@ export function ChatInterface({
       setLoading(false);
       setEndpoints([]);
       setCompanies([]);
+      setTimePeriods([]);
     }
   };
 
@@ -211,7 +243,7 @@ export function ChatInterface({
 
   return (
     <div className="flex-1 flex flex-col pt-24 pb-24">
-      {showExamples && (
+      {showExamples && messages.length === 0 && (
         <div className="grid grid-cols-2 gap-4 p-6">
           {examplePrompts.map((query, index) => (
             <button
@@ -234,10 +266,10 @@ export function ChatInterface({
             }`}
           >
             <div
-              className={`max-w-3xl rounded-lg p-4 ${
+              className={`max-w-3xl rounded-lg p-4 min-w-1xl ${
                 message.role === "user"
-                  // user msg
-                  ? "bg-yellow-500 text-zinc-900"
+                  ? // user msg
+                    "bg-yellow-500 text-zinc-900"
                   : message.isError
                   ? // error msg
                     "bg-red-900/50 text-red-200"
@@ -246,9 +278,10 @@ export function ChatInterface({
               }`}
             >
               {message.content === "loading" ? (
-                <LoadingMessage 
-                  companies={listCompanies} 
-                  endpoints={listEndpoints} 
+                <LoadingMessage
+                  companies={listCompanies}
+                  endpoints={listEndpoints}
+                  timePeriods={listTimePeriods}
                 />
               ) : (
                 <ReactMarkdown
