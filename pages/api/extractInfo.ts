@@ -2,12 +2,16 @@
 import OpenAI from "openai/index.mjs";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { FMP_ENDPOINTS, GPT_MODEL_NAME } from '@/lib/constants';
+import { 
+  tokenizeText, 
+  findKeywordMatches 
+} from '@/lib/utils/nlpHelperFunctions';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// extract all possible company names from query, also extract supported FMP entities like stocks, etfs, etc.
+// extract all possible company names from query, also extract entities supported by FMP general search like stocks, etfs, etc.
 async function extractCompanies(query: string): Promise<string[]> {
   const response = await openai.chat.completions.create({
     model: GPT_MODEL_NAME,
@@ -41,8 +45,8 @@ async function extractCompanies(query: string): Promise<string[]> {
     if (!content) return [];
 
     const parsedContent = JSON.parse(content);
-    const entities = Object.values(parsedContent).find(Array.isArray) || [];
-    return entities;
+    const companies = Object.values(parsedContent).find(Array.isArray) || [];
+    return companies;
   } catch (error) {
     console.error("Error parsing companies:", error);
     return [];
@@ -51,14 +55,23 @@ async function extractCompanies(query: string): Promise<string[]> {
 
 // Get list of relevant FMP endpoints to query based off matching key words in user's query
 async function getRelevantEndpoints(query: string): Promise<string[]> {
-  const lowercaseQuery = query.toLowerCase();
-  return Object.entries(FMP_ENDPOINTS)
-    .filter(([_, info]) =>
-      info.keywords.some((keyword) =>
-        lowercaseQuery.includes(keyword.toLowerCase())
-      )
-    )
-    .map(([endpoint, _]) => endpoint);
+  const queryWords = tokenizeText(query);
+  
+  const endpointMatches = await Promise.all(
+    Object.entries(FMP_ENDPOINTS).map(async ([endpoint, info]) => {
+      const matches = await findKeywordMatches(queryWords, info.keywords);
+      return {
+        endpoint,
+        matchCount: matches.size
+      };
+    })
+  );
+  
+  // Return endpoints that had at least one match, sorted by number of matches
+  return endpointMatches
+    .filter(match => match.matchCount > 0)
+    .sort((a, b) => b.matchCount - a.matchCount)
+    .map(match => match.endpoint);
 }
 
 export default async function handler(

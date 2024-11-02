@@ -1,5 +1,5 @@
 "use client";
-import { useState, KeyboardEvent, FormEvent, Dispatch, SetStateAction } from "react";
+import { useState, KeyboardEvent, FormEvent, Dispatch, SetStateAction, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { Message } from './Container'
 import { FMP_ENDPOINT_NAMES } from '@/lib/constants';
@@ -79,6 +79,13 @@ export function ChatInterface({
   const [listCompanies, setCompanies] = useState<string[]>([]);
   const [listEndpoints, setEndpoints] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // auto-scroll
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const analyzeQuery = async (query: string) => {
     setLoading(true);
@@ -287,6 +294,7 @@ export function ChatInterface({
             </div>
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
 
       <form
