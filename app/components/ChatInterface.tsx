@@ -1,7 +1,8 @@
 "use client";
-import { useState, KeyboardEvent, FormEvent, useRef, useEffect, Dispatch, SetStateAction } from "react";
+import { useState, KeyboardEvent, FormEvent, Dispatch, SetStateAction } from "react";
 import ReactMarkdown from "react-markdown";
 import { Message } from './Container'
+import { FMP_ENDPOINT_NAMES } from '@/lib/constants';
 
 type MarkdownProps = {
   className?: string;
@@ -25,6 +26,42 @@ const LoadingAnimation = () => (
   </div>
 );
 
+const LoadingMessage = ({ companies, endpoints }: { companies: string[], endpoints: string[] }) => {
+  const hasData = companies.length > 0 && endpoints.length > 0;
+
+  return (
+    <div className="space-y-4">
+      <h3 className="font-bold text-lg">
+        {hasData ? "FinBot is Acquiring Data..." : "FinBot is thinking..."}
+      </h3>
+      {hasData ? (
+        <div className="flex flex-wrap gap-3">
+          {companies.map(company =>
+            endpoints.map(endpoint => (
+              <div 
+                key={`${company}-${endpoint}`}
+                className="bg-zinc-700/50 rounded-lg p-3 text-sm flex flex-col items-center"
+              >
+                <span>
+                  Reading {FMP_ENDPOINT_NAMES[endpoint]} for <span className="text-yellow-500">{company}</span>...
+                </span>
+                <div className="mt-2">
+                  <LoadingAnimation />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="flex justify-center mt-4">
+          <LoadingAnimation />
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const examplePrompts = [
   "Summarize Spotify's latest conference call.",
   "What has Airbnb management said about profitability over the last few earnings calls?",
@@ -39,17 +76,9 @@ export function ChatInterface({
   setShowExamples,
 }: ChatInterfaceProps) { 
   const [input, setInput] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const [listCompanies, setCompanies] = useState<string[]>([]);
+  const [listEndpoints, setEndpoints] = useState<string[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const analyzeQuery = async (query: string) => {
     setLoading(true);
@@ -63,7 +92,7 @@ export function ChatInterface({
     setMessages((prev) => [...prev, loadingMessage]);
     try {
       // Step 1: Extract company names and other financial entities
-      const companiesResponse = await fetch("/api/extractCompanies", {
+      const companiesResponse = await fetch("/api/extractInfo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
@@ -74,15 +103,17 @@ export function ChatInterface({
       }
 
       const { companies, endpoints } = await companiesResponse.json();
+      if (companies.length) setCompanies(companies)
+      if (endpoints.length) setEndpoints(endpoints)
 
       let companiesData = {}
-
+      
       // Step 2: Fetch financial data for each company/entity
       if (companies.length && endpoints.length) {
         const dataResponse = await fetch("/api/getFMPData", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companies, endpoints }),
+          body: JSON.stringify({ companies, endpoints, query }),
         });
   
         if (!dataResponse.ok) {
@@ -96,7 +127,11 @@ export function ChatInterface({
       const analysisResponse = await fetch("/api/generateResponse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, companiesData }),
+        body: JSON.stringify({ 
+          query, 
+          companiesData,
+          messageHistory: messages.filter(msg => msg.role === "user" || msg.role === "assistant")
+        }),
       });
 
       if (!analysisResponse.ok) {
@@ -138,6 +173,8 @@ export function ChatInterface({
       });
     } finally {
       setLoading(false);
+      setEndpoints([]);
+      setCompanies([]);
     }
   };
 
@@ -202,7 +239,10 @@ export function ChatInterface({
               }`}
             >
               {message.content === "loading" ? (
-                <LoadingAnimation />
+                <LoadingMessage 
+                  companies={listCompanies} 
+                  endpoints={listEndpoints} 
+                />
               ) : (
                 <ReactMarkdown
                   className="max-w-none"

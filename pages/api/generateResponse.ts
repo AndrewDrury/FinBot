@@ -6,6 +6,8 @@ import { GPT_MODEL_NAME } from "@/lib/constants";
 const CHARS_PER_TOKEN = 4;
 const MAX_TOKENS = GPT_MODEL_NAME.includes("gpt-4") ? 32768 : 16385;
 const MAX_CHARACTERS = MAX_TOKENS * CHARS_PER_TOKEN;
+// Reserve some tokens for the response
+const MAX_PROMPT_CHARS = Math.floor(MAX_CHARACTERS * 0.8);
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -18,21 +20,40 @@ interface CompanyData {
   characterCount: number;
 }
 
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
 function trimData(obj: any, maxSize: number): string {
   const stringified = JSON.stringify(obj, null, 0);
   return stringified.slice(0, maxSize);
 }
 
-function formulatePrompt(query: string, companiesData: CompanyData[]): string {
-  let promptContent = `Query: ${query}`;
+function formulatePrompt(
+  query: string,
+  companiesData: CompanyData[],
+  previousMessages: ChatMessage[]
+): ChatMessage[] {
+  const systemMessage: ChatMessage = {
+    role: "system",
+    content: `You are a sophisticated financial analyst with expertise in interpreting various types of financial data. 
+      Focus on specifically answering the user's question.
+      Format your response in a clear, structured way using markdown, bolding key words.
+      Support your statements with specific data points when available.`,
+  };
 
+  let dataContent = "";
   if (companiesData && companiesData.length) {
-    // Calculate max chars per company to maintain fairness and include a 98% limit safety margin, remove 192 characters already in prompt
-    const charsPerCompany = Math.floor(
-      ((MAX_CHARACTERS - 200) / companiesData.length) * 0.98
+    // Calculate max chars per company accounting for previous messages
+    const previousMessagesChars = previousMessages.reduce(
+      (sum, msg) => sum + msg.content.length,
+      0
     );
+    const availableChars = MAX_PROMPT_CHARS - previousMessagesChars - systemMessage.content.length;
+    const charsPerCompany = Math.floor((availableChars / companiesData.length) * 0.98);
 
-    // Trim company data if necessary and build prompt
+    // Trim company data if necessary
     const trimmedCompaniesData = companiesData.map((company) => {
       if (company.characterCount > charsPerCompany) {
         const trimmedDataString = trimData(company.data, charsPerCompany);
@@ -45,27 +66,45 @@ function formulatePrompt(query: string, companiesData: CompanyData[]): string {
     });
 
     if (trimmedCompaniesData.length) {
-      // Construct the prompt
-      promptContent = `${promptContent}
-            Please analyze the following info and provide a clear, concise response to the query. If specific data related to query is not available, acknowledge that in your response.
-            Available Data:
-            ${JSON.stringify(
-              trimmedCompaniesData
-                .map(
-                  (company) => `
-                ${company.name} (${company.symbol})
-                ${company.data}
-                `
-                )
-                .join("\n")
-            )}`;
+      dataContent = `\nAvailable Data:\n${JSON.stringify(
+        trimmedCompaniesData
+          .map(
+            (company) => `
+          ${company.name} (${company.symbol})
+          ${company.data}
+          `
+          )
+          .join("\n")
+      )}`;
     }
   }
 
-  // Final safety check - fallback in case limit is exceeded
-  return promptContent.length > MAX_CHARACTERS
-    ? promptContent.slice(0, MAX_CHARACTERS)
-    : promptContent;
+  const newUserMessage: ChatMessage = {
+    role: "user",
+    content: `Query: ${query}${dataContent}`,
+  };
+
+  // Construct messages array with history
+  const messages: ChatMessage[] = [systemMessage];
+
+  // Add previous messages while checking total length
+  let totalChars = systemMessage.content.length + newUserMessage.content.length;
+  
+  // Add messages from newest to oldest until we hit the limit
+  for (let i = previousMessages.length - 1; i >= 0; i--) {
+    const msg = previousMessages[i];
+    if (totalChars + msg.content.length <= MAX_PROMPT_CHARS) {
+      messages.push(msg);
+      totalChars += msg.content.length;
+    } else {
+      break;
+    }
+  }
+
+  // Add the new user message last
+  messages.push(newUserMessage);
+
+  return messages;
 }
 
 export default async function handler(
@@ -77,27 +116,15 @@ export default async function handler(
   }
 
   try {
-    const { query, companiesData } = req.body;
+    const { query, companiesData, messageHistory = [] } = req.body;
 
-    // formulate final prompt to send to OpenAI to generate response
-    const promptContent = formulatePrompt(query, companiesData);
+    // Formulate messages array with history
+    const messages = formulatePrompt(query, companiesData, messageHistory);
 
     // Generate final response from OpenAI
     const finalResponse = await openai.chat.completions.create({
       model: GPT_MODEL_NAME,
-      messages: [
-        {
-          role: "system",
-          content: `You are a sophisticated financial analyst with expertise in interpreting various types of financial data. 
-            Focus on specifically answering the user's question.
-            Format your response in a clear, structured way using markdown, bolding key words.
-            Support your statements with specific data points when available.`,
-        },
-        {
-          role: "user",
-          content: promptContent,
-        },
-      ],
+      messages,
       temperature: 0.5,
     });
 
