@@ -21,9 +21,80 @@ interface ChatMessage {
   content: string;
 }
 
-function trimData(obj: any, maxSize: number): string {
+function trimData(obj: any, maxSize: number): CompanyData {
+  if (obj.data?.earning_call_transcript) {
+    return trimTranscripts(obj, maxSize);
+  }
+
   const stringified = JSON.stringify(obj, null, 0);
-  return stringified.slice(0, maxSize);
+  return {
+    ...obj,
+    data: JSON.parse(stringified.slice(0, maxSize)),
+  };
+}
+
+function trimTranscripts(
+  companyData: CompanyData,
+  maxCharsPerCompany: number
+): CompanyData {
+  if (!companyData.data.earning_call_transcript) {
+    return companyData;
+  }
+
+  // Sort transcripts by date in desc order (most recent first)
+  const sortedTranscripts = [...companyData.data.earning_call_transcript].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  // Calculate how many characters to allocate per transcript
+  const numTranscripts = sortedTranscripts.length;
+
+  const metadataBuffer = JSON.stringify({
+    name: companyData.name,
+    symbol: companyData.symbol,
+    data: { earning_call_transcript: [] },
+  }).length;
+
+  const charsPerTranscript = Math.floor(
+    (maxCharsPerCompany - metadataBuffer) / numTranscripts
+  );
+
+  // Trim each transcript
+  const trimmedTranscripts = sortedTranscripts.map((transcript) => {
+    // find space needed for transcript metadata
+    const transcriptMetadata = {
+      symbol: transcript.symbol,
+      quarter: transcript.quarter,
+      year: transcript.year,
+      date: transcript.date,
+      content: "",
+    };
+    const transcriptMetadataSize = JSON.stringify(transcriptMetadata).length;
+
+    // find available space for content
+    const maxContentLength = charsPerTranscript - transcriptMetadataSize;
+
+    return {
+      ...transcript,
+      content: transcript.content.slice(0, maxContentLength),
+    };
+  });
+
+  // Create new company data object with trimmed transcripts
+  const trimmedCompanyData = {
+    ...companyData,
+    data: {
+      ...companyData.data,
+      earning_call_transcript: trimmedTranscripts,
+    },
+  };
+
+  const newCharacterCount = JSON.stringify(trimmedCompanyData).length;
+
+  return {
+    ...trimmedCompanyData,
+    characterCount: newCharacterCount,
+  };
 }
 
 function formulatePrompt(
@@ -61,13 +132,8 @@ function formulatePrompt(
     // Trim company data if necessary
     const trimmedCompaniesData = companiesData.map((company) => {
       if (company.characterCount > charsPerCompany) {
-        const trimmedDataString = trimData(company.data, charsPerCompany);
-        return {
-          name: company.name,
-          characterCount: company.characterCount,
-          symbol: company.symbol,
-          data: trimmedDataString,
-        };
+        const trimmedData = trimData(company, charsPerCompany);
+        return trimmedData;
       }
       return company;
     });

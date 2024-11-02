@@ -54,7 +54,7 @@ const LoadingMessage = ({
   return (
     <div className="space-y-4">
       <h3 className="font-bold text-lg">{"FinBot is Acquiring Data..."}</h3>
-      {hasData && (
+      {hasData ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
             {companies.map((company) =>
@@ -80,6 +80,10 @@ const LoadingMessage = ({
               )
             )}
           </div>
+        </div>
+      ) : (
+        <div className="flex justify-center py-6 px-72">
+          <LoadingAnimation />
         </div>
       )}
     </div>
