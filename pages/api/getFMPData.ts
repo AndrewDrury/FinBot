@@ -93,8 +93,14 @@ async function fetchFMPData(
         symbol
       )}?apikey=${FMP_API_KEY}`;
       const response = await fetch(url);
-      const result = await response.json();
-      data[endpoint] = result;
+      if (!response.ok) {
+        console.error(`Error fetching ${endpoint} for ${symbol}`);
+        continue
+      } else {
+        console.log('response', response)
+        const result = await response.json();
+        data[endpoint] = result;
+      }
     } catch (error) {
       console.error(`Error fetching ${endpoint} for ${symbol}:`, error);
     }

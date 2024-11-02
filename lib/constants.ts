@@ -4,12 +4,11 @@ export const FMP_BASE_URL = "https://financialmodelingprep.com/api";
 
 export const FMP_ENDPOINT_NAMES: { [id: string]: string } = {
   earning_call_transcript: "Earning Call Transcript",
-  // income_statement: "Income Statements",
+  income_statement: "Income Statements",
   company_profile: "Company Profile",
   analyst_estimates: "Analyst Estimates",
   company_notes: "Company Notes",
   sec_filings: "SEC Filings",
-  press_releases: "Press Releases",
 };
 
 export const FMP_ENDPOINTS = {
@@ -29,18 +28,18 @@ export const FMP_ENDPOINTS = {
       "deals",
     ],
   },
-  // income_statement: {
-  //   endpoint: "/income-statement/{symbol}",
-  //   keywords: [
-  //     "revenue",
-  //     "profit",
-  //     "income",
-  //     "earnings",
-  //     "margin",
-  //     "financial",
-  //     "performance",
-  //   ],
-  // },
+  income_statement: {
+    endpoint: "/income-statement/{symbol}",
+    keywords: [
+      "revenue",
+      "profit",
+      "income",
+      "earnings",
+      "margin",
+      "financial",
+      "performance",
+    ],
+  },
   company_profile: {
     endpoint: "/profile/{symbol}",
     keywords: ["overview", "background", "describe"],
@@ -56,10 +55,6 @@ export const FMP_ENDPOINTS = {
   sec_filings: {
     endpoint: "/sec_filings/{symbol}",
     keywords: ["filing", "SEC", "report", "document", "regulatory"],
-  },
-  press_releases: {
-    endpoint: "/press-releases/{symbol}",
-    keywords: ["news", "announcement", "update", "press"],
   },
 };
 
