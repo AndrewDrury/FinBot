@@ -1,16 +1,16 @@
-export const GPT_MODEL_NAME = "gpt-3.5-turbo";
+export const DEFAULT_GPT_MODEL = "gpt-3.5-turbo";
 
 export const FMP_BASE_URL = "https://financialmodelingprep.com/api";
 
-export const FMP_ENDPOINT_NAMES: { [id: string] : string } = {
-    earning_call_transcript: "Earning Call Transcript",
-    // income_statement: "Income Statements",
-    company_profile: "Company Profile",
-    analyst_estimates: "Analyst Estimates",
-    company_notes: "Company Notes",
-    sec_filings: "SEC Filings",
-    press_releases: "Press Releases",
-  };
+export const FMP_ENDPOINT_NAMES: { [id: string]: string } = {
+  earning_call_transcript: "Earning Call Transcript",
+  // income_statement: "Income Statements",
+  company_profile: "Company Profile",
+  analyst_estimates: "Analyst Estimates",
+  company_notes: "Company Notes",
+  sec_filings: "SEC Filings",
+  press_releases: "Press Releases",
+};
 
 export const FMP_ENDPOINTS = {
   earning_call_transcript: {
@@ -64,3 +64,10 @@ export const FMP_ENDPOINTS = {
 };
 
 export type EndpointKey = keyof typeof FMP_ENDPOINTS;
+
+export const EXAMPLE_PROMPTS = [
+  "Summarize Spotify's latest conference call.",
+  "What has Airbnb management said about profitability over the last few earnings calls?",
+  "What are Mark Zuckerberg's and Satya Nadella's recent comments about AI?",
+  "How many new large deals did ServiceNow sign in the last quarter?",
+];

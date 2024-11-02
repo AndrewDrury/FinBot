@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
-import { Header } from "./Header";
+import { Header, OpenAIModelType } from "./Header";
+import { DEFAULT_GPT_MODEL } from "@/lib/constants";
 
 export type Message = {
   role: "user" | "assistant";
@@ -14,6 +15,8 @@ export function ChatContainer() {
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [showExamples, setShowExamples] = useState(true);
+  const [selectedGptModel, setSelectedGptModel] =
+    useState<OpenAIModelType>(DEFAULT_GPT_MODEL);
 
   useEffect(() => {
     setMounted(true);
@@ -30,12 +33,18 @@ export function ChatContainer() {
 
   return (
     <main className="flex flex-col h-screen">
-      <Header startNewChat={onNewChat} />
-      <ChatInterface 
+      <Header
+        startNewChat={onNewChat}
+        selectedModel={selectedGptModel}
+        onModelChange={setSelectedGptModel}
+      />
+      <ChatInterface
         messages={messages}
         setMessages={setMessages}
         showExamples={showExamples}
-        setShowExamples={setShowExamples}/>
+        setShowExamples={setShowExamples}
+        selectedGptModel={selectedGptModel}
+      />
     </main>
   );
 }

@@ -20,15 +20,21 @@ async function fetchEarningTranscriptData(
 ): Promise<any> {
   try {
     // If quarter is specified, use specific quarter endpoint first
-    if (timePeriod.quarter && ['Q1', 'Q2', 'Q3', 'Q4'].includes(timePeriod.quarter)) {
+    if (
+      timePeriod.quarter &&
+      ["Q1", "Q2", "Q3", "Q4"].includes(timePeriod.quarter)
+    ) {
       const quarterNum = parseInt(timePeriod.quarter.slice(1));
       const quarterUrl = `${FMP_BASE_URL}/v3/earning_call_transcript/${symbol}?year=${timePeriod.year}&quarter=${quarterNum}&apikey=${FMP_API_KEY}`;
-      
+
       const quarterResponse = await fetch(quarterUrl);
       const quarterJsonResponse = await quarterResponse.json();
 
       // If quarter endpoint returns empty array, fall back to year endpoint
-      if (Array.isArray(quarterJsonResponse) && quarterJsonResponse.length === 0) {
+      if (
+        Array.isArray(quarterJsonResponse) &&
+        quarterJsonResponse.length === 0
+      ) {
         const yearUrl = `${FMP_BASE_URL}/v4/batch_earning_call_transcript/${symbol}?year=${timePeriod.year}&apikey=${FMP_API_KEY}`;
         const yearResponse = await fetch(yearUrl);
         const yearJsonResponse = await yearResponse.json();
@@ -40,7 +46,9 @@ async function fetchEarningTranscriptData(
     // If only year is specified, use batch endpoint
     else {
       const currentDate = new Date();
-      const url = `${FMP_BASE_URL}/v4/batch_earning_call_transcript/${symbol}?year=${timePeriod.year ?? currentDate.getFullYear()}&apikey=${FMP_API_KEY}`;
+      const url = `${FMP_BASE_URL}/v4/batch_earning_call_transcript/${symbol}?year=${
+        timePeriod.year ?? currentDate.getFullYear()
+      }&apikey=${FMP_API_KEY}`;
       const response = await fetch(url);
       const jsonResponse = await response.json();
       return jsonResponse;
@@ -63,7 +71,7 @@ async function fetchFMPData(
     if (!endpointInfo) continue;
 
     // call earning call transcripts using time periods
-    if (endpoint === 'earning_call_transcript') {
+    if (endpoint === "earning_call_transcript") {
       data[endpoint] = [];
       for (const period of timePeriods) {
         const transcriptData = await fetchEarningTranscriptData(symbol, period);
@@ -127,21 +135,23 @@ export default async function handler(
     const { companies, endpoints, timePeriods } = req.body;
 
     // Gather data for all companies
-    const companiesData = (
-      await Promise.all(
-        companies.map(async (company: string) => {
-          const companyInfo = await searchCompany(company);
-          if (!companyInfo) return null;
+    const companiesData = await Promise.all(
+      companies.map(async (company: string) => {
+        const companyInfo = await searchCompany(company);
+        if (!companyInfo) return null;
 
-          const data = await fetchFMPData(companyInfo.symbol, endpoints, timePeriods);
-          const companyData = {
-            data,
-            ...companyInfo,
-          };
-          const characterCount = JSON.stringify(companyData).length;
-          return { ...companyInfo, data, characterCount };
-        })
-      )
+        const data = await fetchFMPData(
+          companyInfo.symbol,
+          endpoints,
+          timePeriods
+        );
+        const companyData = {
+          data,
+          ...companyInfo,
+        };
+        const characterCount = JSON.stringify(companyData).length;
+        return { ...companyInfo, data, characterCount };
+      })
     );
 
     if (companiesData.length === 0) {

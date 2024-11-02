@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import OpenAI from "openai/index.mjs";
 import type { NextApiRequest, NextApiResponse } from "next";
-import { FMP_ENDPOINTS, GPT_MODEL_NAME } from '@/lib/constants';
-import { 
-  tokenizeText, 
-  findKeywordMatches 
-} from '@/lib/utils/nlpHelperFunctions';
+import { FMP_ENDPOINTS } from "@/lib/constants";
+import {
+  tokenizeText,
+  findKeywordMatches,
+} from "@/lib/utils/nlpHelperFunctions";
+import { OpenAIModelType } from "@/app/components/Header";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -18,9 +19,12 @@ interface TimePeriod {
 
 // 1. extract all possible company names from query
 // 2. extract all possible time periods from query
-async function extractInfo(query: string): Promise<{ companies: string[], timePeriods: TimePeriod[] }> {
+async function extractInfo(
+  query: string,
+  selectedGptModel: OpenAIModelType
+): Promise<{ companies: string[]; timePeriods: TimePeriod[] }> {
   const response = await openai.chat.completions.create({
-    model: GPT_MODEL_NAME,
+    model: selectedGptModel as string,
     messages: [
       {
         role: "system",
@@ -83,12 +87,14 @@ async function extractInfo(query: string): Promise<{ companies: string[], timePe
     const content = response.choices[0].message.content;
     if (!content) return { companies: [], timePeriods: [] };
 
-    const currentDate = new Date();	
+    const currentDate = new Date();
 
     const parsedContent = JSON.parse(content);
     return {
       companies: parsedContent.companies || [],
-      timePeriods: parsedContent.timePeriods || [{year: currentDate.getFullYear()}] //return current year if no time period inferred
+      timePeriods: parsedContent.timePeriods || [
+        { year: currentDate.getFullYear() },
+      ], //return current year if no time period inferred
     };
   } catch (error) {
     console.error("Error parsing companies:", error);
@@ -99,22 +105,22 @@ async function extractInfo(query: string): Promise<{ companies: string[], timePe
 // Get list of relevant FMP endpoints to query based off matching key words in user's query
 async function getRelevantEndpoints(query: string): Promise<string[]> {
   const queryWords = tokenizeText(query);
-  
+
   const endpointMatches = await Promise.all(
     Object.entries(FMP_ENDPOINTS).map(async ([endpoint, info]) => {
       const matches = await findKeywordMatches(queryWords, info.keywords);
       return {
         endpoint,
-        matchCount: matches.size
+        matchCount: matches.size,
       };
     })
   );
-  
+
   // Return endpoints that had at least one match, sorted by number of matches
   return endpointMatches
-    .filter(match => match.matchCount > 0)
+    .filter((match) => match.matchCount > 0)
     .sort((a, b) => b.matchCount - a.matchCount)
-    .map(match => match.endpoint);
+    .map((match) => match.endpoint);
 }
 
 export default async function handler(
@@ -126,10 +132,10 @@ export default async function handler(
   }
 
   try {
-    const { query } = req.body;
+    const { query, selectedGptModel } = req.body;
     const [{ companies, timePeriods }, endpoints] = await Promise.all([
-      extractInfo(query),
-      getRelevantEndpoints(query)
+      extractInfo(query, selectedGptModel),
+      getRelevantEndpoints(query),
     ]);
 
     return res.status(200).json({ companies, endpoints, timePeriods });

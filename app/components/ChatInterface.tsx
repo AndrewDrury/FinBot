@@ -10,7 +10,8 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import { Message } from "./Container";
-import { FMP_ENDPOINT_NAMES } from "@/lib/constants";
+import { FMP_ENDPOINT_NAMES, EXAMPLE_PROMPTS } from "@/lib/constants";
+import { OpenAIModelType } from "./Header";
 
 type MarkdownProps = {
   className?: string;
@@ -23,6 +24,7 @@ type ChatInterfaceProps = {
   setMessages: Dispatch<SetStateAction<Message[]>>;
   showExamples: boolean;
   setShowExamples: Dispatch<SetStateAction<boolean>>;
+  selectedGptModel: OpenAIModelType;
 };
 
 interface TimePeriod {
@@ -38,12 +40,6 @@ const LoadingAnimation = () => (
   </div>
 );
 
-const formatTimePeriod = (period: TimePeriod): string => {
-  return period.quarter
-    ? `${period.quarter} ${period.year}`
-    : `${period.year}`;
-};
-
 const LoadingMessage = ({
   companies,
   endpoints,
@@ -57,9 +53,7 @@ const LoadingMessage = ({
 
   return (
     <div className="space-y-4">
-      <h3 className="font-bold text-lg">
-        {"FinBot is Acquiring Data..."}
-      </h3>
+      <h3 className="font-bold text-lg">{"FinBot is Acquiring Data..."}</h3>
       {hasData && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
@@ -71,7 +65,11 @@ const LoadingMessage = ({
                     className="bg-zinc-700/50 rounded-lg p-3 text-sm flex flex-col items-center"
                   >
                     <span>
-                      Reading <span className="text-yellow-500">{period.quarter} {period.year}</span>{" "}{FMP_ENDPOINT_NAMES[endpoint]} for{" "}
+                      Reading{" "}
+                      <span className="text-yellow-500">
+                        {period.quarter} {period.year}
+                      </span>{" "}
+                      {FMP_ENDPOINT_NAMES[endpoint]} for{" "}
                       <span className="text-yellow-500">{company}</span>
                     </span>
                     <div className="mt-2">
@@ -88,18 +86,12 @@ const LoadingMessage = ({
   );
 };
 
-const examplePrompts = [
-  "Summarize Spotify's latest conference call.",
-  "What has Airbnb management said about profitability over the last few earnings calls?",
-  "What are Mark Zuckerberg's and Satya Nadella's recent comments about AI?",
-  "How many new large deals did ServiceNow sign in the last quarter?",
-];
-
 export function ChatInterface({
   messages,
   setMessages,
   showExamples,
   setShowExamples,
+  selectedGptModel,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState<string>("");
   const [listCompanies, setCompanies] = useState<string[]>([]);
@@ -129,7 +121,7 @@ export function ChatInterface({
       const companiesResponse = await fetch("/api/extractInfo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, selectedGptModel }),
       });
 
       if (!companiesResponse.ok) {
@@ -156,7 +148,7 @@ export function ChatInterface({
           throw new Error("Failed to fetch fmp data");
         }
         const { companiesData } = await dataResponse.json();
-        allCompaniesData = JSON.parse(companiesData)
+        allCompaniesData = JSON.parse(companiesData);
       }
 
       // Step 3: Generate assistant's response using fmp data collected
@@ -169,6 +161,7 @@ export function ChatInterface({
           messageHistory: messages.filter(
             (msg) => msg.role === "user" || msg.role === "assistant"
           ),
+          selectedGptModel,
         }),
       });
 
@@ -245,7 +238,7 @@ export function ChatInterface({
     <div className="flex-1 flex flex-col pt-24 pb-24">
       {showExamples && messages.length === 0 && (
         <div className="grid grid-cols-2 gap-4 p-6">
-          {examplePrompts.map((query, index) => (
+          {EXAMPLE_PROMPTS.map((query, index) => (
             <button
               key={index}
               onClick={() => handleExampleClick(query)}
