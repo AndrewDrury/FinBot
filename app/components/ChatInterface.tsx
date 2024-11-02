@@ -1,17 +1,19 @@
 "use client";
-import { useState, KeyboardEvent, FormEvent, useRef, useEffect } from "react";
-import ReactMarkdown from 'react-markdown';
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-  isError?: boolean;
-};
+import { useState, KeyboardEvent, FormEvent, useRef, useEffect, Dispatch, SetStateAction } from "react";
+import ReactMarkdown from "react-markdown";
+import { Message } from './Container'
 
 type MarkdownProps = {
   className?: string;
   children?: React.ReactNode;
   inline?: boolean;
+};
+
+type ChatInterfaceProps = {
+  messages: Message[];
+  setMessages: Dispatch<SetStateAction<Message[]>>;
+  showExamples: boolean;
+  setShowExamples: Dispatch<SetStateAction<boolean>>;
 };
 
 
@@ -30,10 +32,13 @@ const examplePrompts = [
   "How many new large deals did ServiceNow sign in the last quarter?",
 ];
 
-export function ChatInterface() {
+export function ChatInterface({
+  messages,
+  setMessages,
+  showExamples,
+  setShowExamples,
+}: ChatInterfaceProps) { 
   const [input, setInput] = useState<string>("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [showExamples, setShowExamples] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -48,40 +53,79 @@ export function ChatInterface() {
 
   const analyzeQuery = async (query: string) => {
     setLoading(true);
-    
+
     // Show loading animation in assistant chatbox
-    const loadingMessage: Message = { role: "assistant", content: "loading", isError: false };
-    setMessages(prev => [...prev, loadingMessage]);
+    const loadingMessage: Message = {
+      role: "assistant",
+      content: "loading",
+      isError: false,
+    };
+    setMessages((prev) => [...prev, loadingMessage]);
     try {
-      console.log('query', query)
-      const response = await fetch("/api/analyze", {
+      // Step 1: Extract company names and other financial entities
+      const companiesResponse = await fetch("/api/extractCompanies", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
       });
 
-      console.log('response', response)
-
-      if (!response.ok) {
-        throw new Error("Failed to analyze query");
+      if (!companiesResponse.ok) {
+        throw new Error("Failed to extract companies");
       }
 
-      const data = await response.json();
-      // Success response
+      const { companies, endpoints } = await companiesResponse.json();
+
+      let companiesData = {}
+
+      // Step 2: Fetch financial data for each company/entity
+      if (companies.length && endpoints.length) {
+        const dataResponse = await fetch("/api/getFMPData", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companies, endpoints }),
+        });
+  
+        if (!dataResponse.ok) {
+          throw new Error("Failed to fetch fmp data");
+        }
+        const { formattedData } = await dataResponse.json();
+        companiesData = formattedData
+      }
+
+      // Step 3: Generate assistant's response using fmp data collected
+      const analysisResponse = await fetch("/api/generateResponse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, companiesData }),
+      });
+
+      if (!analysisResponse.ok) {
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = {
+            role: "assistant",
+            content: "Failed to generate response",
+            isError: true,
+          };
+          return newMessages;
+        });
+        throw new Error("Failed to generate assistant's response");
+      }
+
+      const { result } = await analysisResponse.json();
+
       setMessages((prev) => {
         const newMessages = [...prev];
         newMessages[newMessages.length - 1] = {
           role: "assistant",
-          content: data.result,
+          content: result,
           isError: false,
         };
         return newMessages;
-    });
+      });
     } catch (err) {
       const errorMsg = "Failed to analyze query.";
-      console.error(err)
+      console.error(err);
       // Error response
       setMessages((prev) => {
         const newMessages = [...prev];
@@ -90,7 +134,8 @@ export function ChatInterface() {
           content: errorMsg,
           isError: true,
         };
-        return newMessages;});
+        return newMessages;
+      });
     } finally {
       setLoading(false);
     }
@@ -101,7 +146,6 @@ export function ChatInterface() {
     setMessages((prev) => [...prev, { role: "user", content: input }]);
     analyzeQuery(input);
   };
-  
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -148,64 +192,67 @@ export function ChatInterface() {
             <div
               className={`max-w-3xl rounded-lg p-4 ${
                 message.role === "user"
+                  // user msg
                   ? "bg-yellow-500 text-zinc-900"
                   : message.isError
-                  // msg error
-                  ? "bg-red-900/50 text-red-200"
-                  // assistant
-                  : "bg-zinc-800 text-zinc-300"
+                  ? // error msg
+                    "bg-red-900/50 text-red-200"
+                  : // assistant msg
+                    "bg-zinc-800 text-zinc-300"
               }`}
             >
-              {message.content === 'loading' ? (
-                <LoadingAnimation/>
-                ) : ((
-                  <ReactMarkdown
-                    className="max-w-none"
-                    components={{
-                      // Style code blocks and inline code
-                      code: ({ className, children, inline }: MarkdownProps) => (
-                        <code
-                          className={`${className} ${
-                            inline 
-                              ? "bg-zinc-700/50 px-1 py-0.5 rounded text-sm" 
-                              : "block bg-zinc-700/50 p-2 rounded-lg"
-                          }`}
-                        >
-                          {children}
-                        </code>
-                      ),
-                      // Style links
-                      a: ({ children, ...props }) => (
-                        <a 
-                          className="text-yellow-500 hover:text-yellow-400 underline"
-                          {...props}
-                        >
-                          {children}
-                        </a>
-                      ),
-                      // Style lists
-                      ul: ({ children, ...props }) => (
-                        <ul className="list-disc pl-4 space-y-1" {...props}>
-                          {children}
-                        </ul>
-                      ),
-                      ol: ({ children, ...props }) => (
-                        <ol className="list-decimal pl-4 space-y-1" {...props}>
-                          {children}
-                        </ol>
-                      ),
-                    }}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
-                ))
-              }
+              {message.content === "loading" ? (
+                <LoadingAnimation />
+              ) : (
+                <ReactMarkdown
+                  className="max-w-none"
+                  components={{
+                    // Style code blocks and inline code
+                    code: ({ className, children, inline }: MarkdownProps) => (
+                      <code
+                        className={`${className} ${
+                          inline
+                            ? "bg-zinc-700/50 px-1 py-0.5 rounded text-sm"
+                            : "block bg-zinc-700/50 p-2 rounded-lg"
+                        }`}
+                      >
+                        {children}
+                      </code>
+                    ),
+                    // Style links
+                    a: ({ children, ...props }) => (
+                      <a
+                        className="text-yellow-500 hover:text-yellow-400 underline"
+                        {...props}
+                      >
+                        {children}
+                      </a>
+                    ),
+                    // Style lists
+                    ul: ({ children, ...props }) => (
+                      <ul className="list-disc pl-4 space-y-1" {...props}>
+                        {children}
+                      </ul>
+                    ),
+                    ol: ({ children, ...props }) => (
+                      <ol className="list-decimal pl-4 space-y-1" {...props}>
+                        {children}
+                      </ol>
+                    ),
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="fixed bottom-0 w-full p-6 border-t border-zinc-800 bg-zinc-900">
+      <form
+        onSubmit={handleSubmit}
+        className="fixed bottom-0 w-full p-6 border-t border-zinc-800 bg-zinc-900"
+      >
         <div className="flex gap-4">
           <input
             type="text"
@@ -218,7 +265,7 @@ export function ChatInterface() {
           />
           <button
             type="submit"
-            className="p-4 rounded-lg bg-yellow-500 text-zinc-900 hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-4 rounded-lg bg-yellow-500 text-zinc-900 hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             disabled={loading || !input.trim()}
           >
             {loading ? <>Analyzing...</> : "→"}
